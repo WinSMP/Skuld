@@ -1,0 +1,14 @@
+name: SkullPlugin
+version: '0.1.0-SNAPSHOT'
+main: 'org.winlogon.skullplugin.SkullPlugin'
+authors: ['winlogon']
+website: 'https://github.com/walker84837/SkullPlugin'
+api-version: 1.21
+description: 'Minimalist and no nonsense DM plugin.'
+folia-supported: true
+dependencies:
+  server:
+    CommandAPI:
+      load: BEFORE
+      required: true
+      join-classpath: true

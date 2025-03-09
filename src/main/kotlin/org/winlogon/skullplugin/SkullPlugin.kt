@@ -2,16 +2,22 @@ package org.winlogon.skullplugin
 
 import com.destroystokyo.paper.profile.ProfileProperty
 import dev.jorel.commandapi.CommandAPICommand
+import dev.jorel.commandapi.arguments.OfflinePlayerArgument
+import dev.jorel.commandapi.executors.PlayerCommandExecutor
 import dev.jorel.commandapi.arguments.StringArgument
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask
 import org.bukkit.Bukkit
 import org.bukkit.Material
+import org.bukkit.OfflinePlayer
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.SkullMeta
 import org.bukkit.plugin.java.JavaPlugin
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.util.function.Consumer
 import java.util.*
 
 class SkullPlugin : JavaPlugin() {
@@ -30,8 +36,8 @@ class SkullPlugin : JavaPlugin() {
     }
 
     override fun onEnable() {
-        instance = this
         saveDefaultConfig()
+        instance = this
         reloadConfig()
         registerCommands()
     }
@@ -39,7 +45,7 @@ class SkullPlugin : JavaPlugin() {
     private fun registerCommands() {
         CommandAPICommand("skull")
             .withArguments(StringArgument("username"))
-            .executesPlayer { player, args ->
+            .executesPlayer(PlayerCommandExecutor { player, args ->
                 val username = args.get("username") as String
                 val xpCost = config.getInt("xp-cost", 100)
 
@@ -65,7 +71,7 @@ class SkullPlugin : JavaPlugin() {
                         }
                     }
                 }
-            }
+            })
             .register()
     }
 
@@ -83,16 +89,21 @@ class SkullPlugin : JavaPlugin() {
         else -> 9 * level - 158
     }
 
-    // Async/sync handling
     private fun runAsync(task: () -> Unit) {
-        if (isFolia) Bukkit.getAsyncScheduler().runNow(instance) { task() }
-        else Bukkit.getScheduler().runTaskAsynchronously(instance, task)
+    if (isFolia) {
+        Bukkit.getAsyncScheduler().runNow(instance, Consumer<ScheduledTask> { task() })
+    } else {
+        Bukkit.getScheduler().runTaskAsynchronously(instance, task)
     }
+}
 
-    private fun runSync(player: Player, task: () -> Unit) {
-        if (isFolia) player.scheduler.run(instance, { _ -> task() }, null)
-        else Bukkit.getScheduler().runTask(instance, task)
+private fun runSync(player: Player, task: () -> Unit) {
+    if (isFolia) {
+        player.scheduler.run(instance, Consumer<ScheduledTask> { task() }, null)
+    } else {
+        Bukkit.getScheduler().runTask(instance, task)
     }
+}
 
     // UUID fetching with fallback
     private fun getUUID(username: String): UUID {
@@ -110,7 +121,7 @@ class SkullPlugin : JavaPlugin() {
 
             when (conn.responseCode) {
                 200 -> {
-                    val json = conn.inputStream.bufferedReader().use { org.json.JSONObject(it.readText()) }
+                    val json = conn.inputStream.bufferedReader().use { JSONObject(it.readText()) }
                     return json.getString("id").toUUID()
                 }
                 429 -> logger.warning("Mojang API rate limited, falling back to Minetools")
@@ -132,7 +143,7 @@ class SkullPlugin : JavaPlugin() {
 
             if (conn.responseCode != 200) throw Exception("Minetools API error (${conn.responseCode})")
 
-            val json = conn.inputStream.bufferedReader().use { org.json.JSONObject(it.readText()) }
+            val json = conn.inputStream.bufferedReader().use { JSONObject(it.readText()) }
             if (json.getString("status") != "OK") throw Exception("Minetools API: ${json.optString("error")}")
 
             return json.getString("id").toUUID()
@@ -153,16 +164,15 @@ class SkullPlugin : JavaPlugin() {
 
         if (conn.responseCode != 200) throw Exception("Texture API error (${conn.responseCode})")
 
-        val json = conn.inputStream.bufferedReader().use { org.json.JSONObject(it.readText()) }
+        val json = conn.inputStream.bufferedReader().use { JSONObject(it.readText()) }
         val props = json.getJSONArray("properties")
 
         for (i in 0 until props.length()) {
             val prop = props.getJSONObject(i)
             if (prop.getString("name") == "textures") {
-                return TextureData(
-                    prop.getString("value"),
-                    prop.getString("signature")
-                )
+                val value = prop.getString("value")
+                val signature = prop.optString("signature", "")
+                return TextureData(value, signature)
             }
         }
         throw Exception("No texture data found")

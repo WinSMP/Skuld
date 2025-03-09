@@ -44,6 +44,7 @@ class SkullPlugin : JavaPlugin() {
 
     private fun registerCommands() {
         CommandAPICommand("skull")
+            .withAliases("head")
             .withArguments(StringArgument("username"))
             .executesPlayer(PlayerCommandExecutor { player, args ->
                 val username = args.get("username") as String
@@ -63,7 +64,7 @@ class SkullPlugin : JavaPlugin() {
 
                             player.giveExp(-xpCost)
                             player.inventory.addItem(skull)
-                            player.sendMessage("§aObtained skull of $username! §7(-$xpCost XP)")
+                            player.sendMessage("§7Obtained skull of §3$username§7! (-$xpCost XP)")
                         }
                     } catch (e: Exception) {
                         runSync(player) {
@@ -90,20 +91,20 @@ class SkullPlugin : JavaPlugin() {
     }
 
     private fun runAsync(task: () -> Unit) {
-    if (isFolia) {
-        Bukkit.getAsyncScheduler().runNow(instance, Consumer<ScheduledTask> { task() })
-    } else {
-        Bukkit.getScheduler().runTaskAsynchronously(instance, task)
+        if (isFolia) {
+            Bukkit.getAsyncScheduler().runNow(instance, Consumer<ScheduledTask> { task() })
+        } else {
+            Bukkit.getScheduler().runTaskAsynchronously(instance, task)
+        }
     }
-}
-
-private fun runSync(player: Player, task: () -> Unit) {
-    if (isFolia) {
-        player.scheduler.run(instance, Consumer<ScheduledTask> { task() }, null)
-    } else {
-        Bukkit.getScheduler().runTask(instance, task)
+    
+    private fun runSync(player: Player, task: () -> Unit) {
+        if (isFolia) {
+            player.scheduler.run(instance, Consumer<ScheduledTask> { task() }, null)
+        } else {
+            Bukkit.getScheduler().runTask(instance, task)
+        }
     }
-}
 
     // UUID fetching with fallback
     private fun getUUID(username: String): UUID {

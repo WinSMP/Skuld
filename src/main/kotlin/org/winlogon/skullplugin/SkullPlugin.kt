@@ -1,11 +1,14 @@
 package org.winlogon.skullplugin
 
 import com.destroystokyo.paper.profile.ProfileProperty
+
 import dev.jorel.commandapi.CommandAPICommand
 import dev.jorel.commandapi.arguments.OfflinePlayerArgument
 import dev.jorel.commandapi.executors.PlayerCommandExecutor
 import dev.jorel.commandapi.arguments.StringArgument
+
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask
+
 import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.OfflinePlayer
@@ -14,13 +17,18 @@ import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.SkullMeta
 import org.bukkit.plugin.java.JavaPlugin
 import org.json.JSONObject
+
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.util.function.Consumer
+import java.util.concurrent.Executors
+import java.util.concurrent.ExecutorService
 import java.util.*
 
 class SkullPlugin : JavaPlugin() {
+    private lateinit var executor: ExecutorService
+
     companion object {
         lateinit var instance: SkullPlugin
         val isFolia = checkFolia()
@@ -40,6 +48,11 @@ class SkullPlugin : JavaPlugin() {
         instance = this
         reloadConfig()
         registerCommands()
+        executor = Executors.newCachedThreadPool()
+    }
+
+    override fun onDisable() {
+        executor.shutdownNow()
     }
 
     private fun registerCommands() {
@@ -77,11 +90,7 @@ class SkullPlugin : JavaPlugin() {
     }
 
     private fun runAsync(task: () -> Unit) {
-        if (isFolia) {
-            Bukkit.getAsyncScheduler().runNow(instance, Consumer<ScheduledTask> { task() })
-        } else {
-            Bukkit.getScheduler().runTaskAsynchronously(instance, task)
-        }
+        executor.submit(task)
     }
     
     private fun runSync(player: Player, task: () -> Unit) {

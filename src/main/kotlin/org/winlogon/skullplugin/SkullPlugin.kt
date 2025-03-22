@@ -1,11 +1,14 @@
 package org.winlogon.skullplugin
 
 import com.destroystokyo.paper.profile.ProfileProperty
+
 import dev.jorel.commandapi.CommandAPICommand
 import dev.jorel.commandapi.arguments.OfflinePlayerArgument
 import dev.jorel.commandapi.executors.PlayerCommandExecutor
 import dev.jorel.commandapi.arguments.StringArgument
+
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask
+
 import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.OfflinePlayer
@@ -14,13 +17,18 @@ import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.SkullMeta
 import org.bukkit.plugin.java.JavaPlugin
 import org.json.JSONObject
+
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.util.function.Consumer
+import java.util.concurrent.Executors
+import java.util.concurrent.ExecutorService
 import java.util.*
 
 class SkullPlugin : JavaPlugin() {
+    private lateinit var executor: ExecutorService
+
     companion object {
         lateinit var instance: SkullPlugin
         val isFolia = checkFolia()
@@ -40,11 +48,15 @@ class SkullPlugin : JavaPlugin() {
         instance = this
         reloadConfig()
         registerCommands()
+        executor = Executors.newCachedThreadPool()
+    }
+
+    override fun onDisable() {
+        executor.shutdownNow()
     }
 
     private fun registerCommands() {
         CommandAPICommand("skull")
-            .withAliases("head")
             .withArguments(StringArgument("username"))
             .executesPlayer(PlayerCommandExecutor { player, args ->
                 val username = args.get("username") as String
@@ -57,12 +69,13 @@ class SkullPlugin : JavaPlugin() {
                         val skull = createSkull(uuid, username, textureData)
 
                         runSync(player) {
-                            if (player.getTotalXP() < xpCost) {
+                            val currentXP = player.calculateTotalExperiencePoints()
+                            if (currentXP < xpCost) {
                                 player.sendMessage("§cYou need at least $xpCost XP points!")
                                 return@runSync
                             }
 
-                            player.giveExp(-xpCost)
+                            player.setExperienceLevelAndProgress(currentXP - xpCost)
                             player.inventory.addItem(skull)
                             player.sendMessage("§7Obtained skull of §3$username§7! (-$xpCost XP)")
                         }
@@ -76,26 +89,8 @@ class SkullPlugin : JavaPlugin() {
             .register()
     }
 
-    // XP calculation functions
-    private fun Player.getTotalXP(): Int {
-        var total = 0
-        for (i in 0 until level) total += getExpForLevel(i)
-        total += (getExpForLevel(level) * exp).toInt()
-        return total
-    }
-
-    private fun getExpForLevel(level: Int): Int = when {
-        level <= 15 -> 2 * level + 7
-        level <= 30 -> 5 * level - 38
-        else -> 9 * level - 158
-    }
-
     private fun runAsync(task: () -> Unit) {
-        if (isFolia) {
-            Bukkit.getAsyncScheduler().runNow(instance, Consumer<ScheduledTask> { task() })
-        } else {
-            Bukkit.getScheduler().runTaskAsynchronously(instance, task)
-        }
+        executor.submit(task)
     }
     
     private fun runSync(player: Player, task: () -> Unit) {

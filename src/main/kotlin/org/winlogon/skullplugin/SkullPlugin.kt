@@ -44,7 +44,6 @@ class SkullPlugin : JavaPlugin() {
 
     private fun registerCommands() {
         CommandAPICommand("skull")
-            .withAliases("head")
             .withArguments(StringArgument("username"))
             .executesPlayer(PlayerCommandExecutor { player, args ->
                 val username = args.get("username") as String
@@ -57,12 +56,13 @@ class SkullPlugin : JavaPlugin() {
                         val skull = createSkull(uuid, username, textureData)
 
                         runSync(player) {
-                            if (player.getTotalXP() < xpCost) {
+                            val currentXP = player.calculateTotalExperiencePoints()
+                            if (currentXP < xpCost) {
                                 player.sendMessage("§cYou need at least $xpCost XP points!")
                                 return@runSync
                             }
 
-                            player.giveExp(-xpCost)
+                            player.setExperienceLevelAndProgress(currentXP - xpCost)
                             player.inventory.addItem(skull)
                             player.sendMessage("§7Obtained skull of §3$username§7! (-$xpCost XP)")
                         }
@@ -74,20 +74,6 @@ class SkullPlugin : JavaPlugin() {
                 }
             })
             .register()
-    }
-
-    // XP calculation functions
-    private fun Player.getTotalXP(): Int {
-        var total = 0
-        for (i in 0 until level) total += getExpForLevel(i)
-        total += (getExpForLevel(level) * exp).toInt()
-        return total
-    }
-
-    private fun getExpForLevel(level: Int): Int = when {
-        level <= 15 -> 2 * level + 7
-        level <= 30 -> 5 * level - 38
-        else -> 9 * level - 158
     }
 
     private fun runAsync(task: () -> Unit) {

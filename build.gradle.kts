@@ -63,6 +63,7 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
     compileOnly("dev.jorel:commandapi-bukkit-core:9.7.0")
     implementation("org.json:json:20250107")
+    implementation("com.github.ben-manes.caffeine:caffeine:3.2.0")
     
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
     testImplementation("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
@@ -86,7 +87,9 @@ tasks.processResources {
 tasks.shadowJar {
     archiveClassifier.set("")
     relocate("io.papermc.lib", "shadow.io.papermc.paperlib")
-    minimize()
+    minimize {
+        exclude(dependency("com.github.ben-manes.caffeine:caffeine"))
+    }
 }
 
 // Disable jar and replace with shadowJar

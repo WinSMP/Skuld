@@ -1,2 +1,8 @@
 # The cost of getting a player's skull, in experience points
 xp-cost: 100
+
+cache:
+  # Number of days to keep a player's skull in the cache
+  # The plugin also keeps a cache of all usernames, and its expiration time is
+  # expiration-days - 2. If this is lower than 0, it's forced to be 1
+  expiration-days: 3

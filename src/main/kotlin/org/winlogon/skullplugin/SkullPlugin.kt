@@ -1,6 +1,8 @@
 package org.winlogon.skullplugin
 
 import com.destroystokyo.paper.profile.ProfileProperty
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
 
 import dev.jorel.commandapi.CommandAPICommand
 import dev.jorel.commandapi.arguments.OfflinePlayerArgument
@@ -25,9 +27,12 @@ import java.util.function.Consumer
 import java.util.concurrent.Executors
 import java.util.concurrent.ExecutorService
 import java.util.*
+import java.time.Duration
 
 class SkullPlugin : JavaPlugin() {
     private lateinit var executor: ExecutorService
+    private lateinit var usernameCache: Cache<String, UUID>
+    private lateinit var textureCache: Cache<UUID, TextureData>
 
     companion object {
         lateinit var instance: SkullPlugin
@@ -46,9 +51,21 @@ class SkullPlugin : JavaPlugin() {
     override fun onEnable() {
         saveDefaultConfig()
         instance = this
-        reloadConfig()
-        registerCommands()
         executor = Executors.newCachedThreadPool()
+        reloadConfig()
+
+        logger.info("Registering commands...")
+        registerCommands()
+
+        val expirationDays = config.getLong("cache.expiration-days", 3)
+        usernameCache = Caffeine.newBuilder()
+            .expireAfterWrite(Duration.ofDays(expirationDays))
+            .build()
+
+        val usernameExpirationDays = (expirationDays - 2).coerceAtLeast(1)
+        textureCache = Caffeine.newBuilder()
+            .expireAfterWrite(Duration.ofDays(usernameExpirationDays))
+            .build()
     }
 
     override fun onDisable() {
@@ -103,6 +120,10 @@ class SkullPlugin : JavaPlugin() {
 
     // UUID fetching with fallback
     private fun getUUID(username: String): UUID {
+        return usernameCache.get(username) { fetchUUID(username) }
+    }
+
+    private fun fetchUUID(username: String): UUID {
         val encodedName = URLEncoder.encode(username, "UTF-8")
 
         // Try Mojang API first
@@ -137,19 +158,25 @@ class SkullPlugin : JavaPlugin() {
                 requestMethod = "GET"
             }
 
-            if (conn.responseCode != 200) throw Exception("Minetools API error (${conn.responseCode})")
+            if (conn.responseCode != 200) throw Exception("minetools error (${conn.responseCode})")
 
             val json = conn.inputStream.bufferedReader().use { JSONObject(it.readText()) }
-            if (json.getString("status") != "OK") throw Exception("Minetools API: ${json.optString("error")}")
+            if (json.getString("status") != "OK") throw Exception("(from Minetools API: ${json.optString("error")})")
 
             return json.getString("id").toUUID()
         } catch (e: Exception) {
-            throw Exception("Failed both Mojang and Minetools API: ${e.message}")
+            throw Exception("Fallback and main Mojang API failed to match username: ${e.message}")
         }
     }
 
-    // Texture data and skull creation
+
     private fun getTextureData(uuid: UUID): TextureData {
+        return textureCache.get(uuid) { fetchTextureData(it) }
+    }
+
+
+    // Texture data and skull creation
+    private fun fetchTextureData(uuid: UUID): TextureData {
         val url = URL("https://sessionserver.mojang.com/session/minecraft/profile/${uuid.toString().replace("-", "")}")
         val conn = url.openConnection() as HttpURLConnection
         conn.apply {

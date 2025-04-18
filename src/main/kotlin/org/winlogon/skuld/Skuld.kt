@@ -1,4 +1,5 @@
-package org.winlogon.skullplugin
+// SPDX-License-Identifier: MPL-2.0
+package org.winlogon.skuld
 
 import com.destroystokyo.paper.profile.ProfileProperty
 import com.github.benmanes.caffeine.cache.Cache
@@ -29,13 +30,13 @@ import java.time.Duration
 import kotlinx.coroutines.*
 import kotlin.coroutines.resume
 
-class SkullPlugin : JavaPlugin() {
+class Skuld : JavaPlugin() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var usernameCache: Cache<String, UUID>
     private lateinit var textureCache: Cache<UUID, TextureData>
 
     companion object {
-        lateinit var instance: SkullPlugin
+        lateinit var instance: Skuld
         val isFolia = checkFolia()
 
         private fun checkFolia(): Boolean {

@@ -1,10 +1,10 @@
-name: SkullPlugin
-version: '0.1.0-SNAPSHOT'
-main: 'org.winlogon.skullplugin.SkullPlugin'
+name: "${NAME}"
+version: "${VERSION}"
+main: "${PACKAGE}.Skuld"
 authors: ['winlogon']
-website: 'https://github.com/walker84837/SkullPlugin'
-api-version: 1.21
-description: 'Minimalist and no nonsense DM plugin.'
+website: "https://github.com/walker84837/Skuld"
+api-version: "1.21"
+description: "Never forget where your players have been."
 folia-supported: true
 dependencies:
   server:

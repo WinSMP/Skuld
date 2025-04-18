@@ -1,6 +1,6 @@
-# SkullPlugin
+# Skuld
 
-> Get skulls of players.
+> Never forget where your players have been.
 
 ## Features
 
@@ -21,8 +21,8 @@ To build the plugin from source, you will need Gradle and Java 21. Follow these 
 
 1. **Clone the Repository**:
    ```sh
-   git clone https://github.com/walker84837/SkullPlugin.git
-   cd SkullPlugin
+   git clone https://github.com/walker84837/Skuld.git
+   cd Skuld
    ```
 
 2. **Build the code**:
@@ -57,7 +57,7 @@ Contributions are welcome! Please open an issue or submit a pull request.
 
 ### Support
 
-If you encounter any issues or have questions, please open an [issue](https://github.com/walker84837/SkullPlugin/issues).
+If you encounter any issues or have questions, please open an [issue](https://github.com/walker84837/Skuld/issues).
 
 ## Acknowledgements
 

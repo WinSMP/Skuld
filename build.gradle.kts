@@ -6,7 +6,7 @@ plugins {
     kotlin("jvm") version "2.1.10"
 }
 
-group = "org.winlogon.skullplugin"
+group = "org.winlogon.skuld"
 
 fun getTime(): String {
     val sdf = SimpleDateFormat("yyMMdd-HHmm")

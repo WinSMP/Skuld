@@ -24,13 +24,13 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.util.function.Consumer
-import java.util.concurrent.Executors
-import java.util.concurrent.ExecutorService
 import java.util.*
 import java.time.Duration
+import kotlinx.coroutines.*
+import kotlin.coroutines.resume
 
 class SkullPlugin : JavaPlugin() {
-    private lateinit var executor: ExecutorService
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var usernameCache: Cache<String, UUID>
     private lateinit var textureCache: Cache<UUID, TextureData>
 
@@ -51,7 +51,6 @@ class SkullPlugin : JavaPlugin() {
     override fun onEnable() {
         saveDefaultConfig()
         instance = this
-        executor = Executors.newCachedThreadPool()
         reloadConfig()
 
         logger.info("Registering commands...")
@@ -69,7 +68,7 @@ class SkullPlugin : JavaPlugin() {
     }
 
     override fun onDisable() {
-        executor.shutdownNow()
+        scope.cancel()
     }
 
     private fun registerCommands() {
@@ -79,7 +78,7 @@ class SkullPlugin : JavaPlugin() {
                 val username = args.get("username") as String
                 val xpCost = config.getInt("xp-cost", 100)
 
-                runAsync {
+                scope.launch {
                     try {
                         val uuid = getUUID(username)
                         val textureData = getTextureData(uuid)
@@ -106,15 +105,27 @@ class SkullPlugin : JavaPlugin() {
             .register()
     }
 
-    private fun runAsync(task: () -> Unit) {
-        executor.submit(task)
-    }
-    
-    private fun runSync(player: Player, task: () -> Unit) {
+    private suspend fun runSync(player: Player, block: () -> Unit) {
         if (isFolia) {
-            player.scheduler.run(instance, Consumer<ScheduledTask> { task() }, null)
+            suspendCancellableCoroutine { continuation ->
+                player.scheduler.run(instance, Consumer { _ ->
+                    try {
+                        block()
+                    } finally {
+                        continuation.resume(Unit)
+                    }
+                }, null)
+            }
         } else {
-            Bukkit.getScheduler().runTask(instance, task)
+            suspendCancellableCoroutine { continuation ->
+                Bukkit.getScheduler().runTask(instance, Runnable {
+                    try {
+                        block()
+                    } finally {
+                        continuation.resume(Unit)
+                    }
+                })
+            }
         }
     }
 
@@ -169,11 +180,9 @@ class SkullPlugin : JavaPlugin() {
         }
     }
 
-
     private fun getTextureData(uuid: UUID): TextureData {
         return textureCache.get(uuid) { fetchTextureData(it) }
     }
-
 
     // Texture data and skull creation
     private fun fetchTextureData(uuid: UUID): TextureData {

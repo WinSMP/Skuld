@@ -31,6 +31,8 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.*
 
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder
+import net.kyori.adventure.text.format.NamedTextColor
 
 import org.bukkit.Bukkit
 import org.bukkit.Material
@@ -114,17 +116,20 @@ class Skuld : JavaPlugin() {
                                 val xpCost = config.getInt("xp-cost", 100)
                                 val currentXP = player.calculateTotalExperiencePoints()
                                 if (currentXP < xpCost) {
-                                    player.sendMessage("§cYou need at least $xpCost XP points!")
+                                    player.sendRichMessage("<red>You need at least $xpCost XP points!")
                                     return@runSync
                                 }
 
                                 player.setExperienceLevelAndProgress(currentXP - xpCost)
                                 player.inventory.addItem(skull)
-                                player.sendMessage("§7Obtained skull of §3$username§7! (-$xpCost XP)")
+
+                                val usernameComp = Placeholder.component("username", Component.text(username, NamedTextColor.DARK_AQUA))
+                                val decrease = Placeholder.component("decrease", Component.text("-$xpCost", NamedTextColor.DARK_GREEN))
+                                player.sendRichMessage("<gray>Obtained skull of <username>! (<decrease> XP)", usernameComp, decrease)
                             }
                         } catch (e: Exception) {
                             runSync(player) {
-                                player.sendMessage("§cError: ${e.message?.replaceFirstChar { it.lowercase() }}")
+                                player.sendRichMessage("<red>Error: ${e.message?.replaceFirstChar { it.lowercase() }}")
                             }
                         }
                     }
@@ -152,15 +157,29 @@ class Skuld : JavaPlugin() {
                         val uuid = getUUID(targetName)
                         val history = nameKeeper.getHistory(uuid)
                         runSync(sender) {
-                            if (history.isEmpty()) {
-                                sender.sendMessage("§cNo name history found for §4$targetName§c.")
+                            val isHistoryEmpty = history.isEmpty()
+                            val targetPlaceholder = Placeholder.component(
+                                "target",
+                                Component.text(
+                                    targetName, if (isHistoryEmpty) {
+                                        NamedTextColor.DARK_RED
+                                    } else {
+                                        NamedTextColor.DARK_AQUA
+                                    }
+                                )
+                            )
+                            if (isHistoryEmpty) {
+                                sender.sendRichMessage("<red>No name history found for <target>.", targetPlaceholder)
                             } else {
-                                sender.sendMessage("§7Name history for §3$targetName§7: ${history.joinToString(", ")}")
+                                sender.sendRichMessage(
+                                    "<gray>Name history for <target>: <dark_aqua>${history.joinToString("<dark_aqua>, <dark_aqua>")}</dark_aqua>",
+                                    targetPlaceholder
+                                )
                             }
                         }
                     } catch (e: Exception) {
                         runSync(sender) {
-                            sender.sendMessage("§cError fetching history: ${e.message}")
+                            sender.sendRichMessage("<red>Error fetching history: ${e.message}")
                         }
                     }
                 }

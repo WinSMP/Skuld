@@ -4,36 +4,50 @@ package org.winlogon.skuld
 import com.destroystokyo.paper.profile.ProfileProperty
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
+import com.mojang.brigadier.Command
+import com.mojang.brigadier.arguments.StringArgumentType
+import com.mojang.brigadier.builder.LiteralArgumentBuilder
+import com.mojang.brigadier.builder.RequiredArgumentBuilder
+import com.mojang.brigadier.context.CommandContext
+import com.mojang.brigadier.suggestion.SuggestionsBuilder
+import com.mojang.brigadier.tree.LiteralCommandNode
 
-import dev.jorel.commandapi.CommandAPICommand
-import dev.jorel.commandapi.arguments.OfflinePlayerArgument
-import dev.jorel.commandapi.executors.PlayerCommandExecutor
-import dev.jorel.commandapi.arguments.StringArgument
-
+import io.papermc.paper.command.brigadier.CommandSourceStack
+import io.papermc.paper.command.brigadier.Commands
+import io.papermc.paper.command.brigadier.argument.ArgumentTypes
+import io.papermc.paper.plugin.lifecycle.event.LifecycleEventManager
+import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask
+
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
+import java.time.Duration
+import java.util.*
+import java.util.concurrent.CompletableFuture
+import java.util.function.Consumer
+
+import kotlin.coroutines.resume
+import kotlinx.coroutines.*
+
+import net.kyori.adventure.text.Component
 
 import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.OfflinePlayer
+import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.SkullMeta
 import org.bukkit.plugin.java.JavaPlugin
 import org.json.JSONObject
 
-import java.net.HttpURLConnection
-import java.net.URL
-import java.net.URLEncoder
-import java.util.function.Consumer
-import java.util.*
-import java.time.Duration
-import kotlinx.coroutines.*
-import kotlin.coroutines.resume
-
 class Skuld : JavaPlugin() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val logger: java.util.logging.Logger = getLogger()
     private lateinit var usernameCache: Cache<String, UUID>
     private lateinit var textureCache: Cache<UUID, TextureData>
+    private lateinit var nameKeeper: PlayerHistoryKeeper
 
     companion object {
         lateinit var instance: Skuld
@@ -55,55 +69,107 @@ class Skuld : JavaPlugin() {
         reloadConfig()
 
         logger.info("Registering commands...")
-        registerCommands()
 
-        val expirationDays = config.getLong("cache.expiration-days", 3)
+        val expirationDays = config.getLong("cache.expiration-days", 3).coerceAtLeast(1L)
         usernameCache = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofDays(expirationDays))
             .build()
 
-        val usernameExpirationDays = (expirationDays - 2).coerceAtLeast(1)
+        val usernameExpirationDays = (expirationDays - 2).coerceAtLeast(1L)
         textureCache = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofDays(usernameExpirationDays))
             .build()
+
+        val dbName = config.getString("cache.database-names.name") ?: "skuld_names"
+        val dbUsername = config.getString("cache.database-names.username") ?: "postgres"
+        val dbPassword = config.getString("cache.database-names.password") ?: "password"
+        val connections: Int = config.getInt("cache.database-names.connections", 10)
+        nameKeeper = PlayerHistoryKeeper(dbName, dbUsername, dbPassword, connections, logger)
+
+        lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS) { event ->
+            val registrar = event.registrar()
+            registrar.register(buildSkullCommand())
+            registrar.register(buildNameHistoryCommand())
+        }
     }
 
     override fun onDisable() {
         scope.cancel()
     }
 
-    private fun registerCommands() {
-        CommandAPICommand("skull")
-            .withArguments(StringArgument("username"))
-            .executesPlayer(PlayerCommandExecutor { player, args ->
-                val username = args.get("username") as String
-                val xpCost = config.getInt("xp-cost", 100)
+    private fun buildSkullCommand(): LiteralCommandNode<CommandSourceStack> {
+        return Commands.literal("skull")
+            .then(Commands.argument("username", StringArgumentType.word())
+                .executes(Command { ctx ->
+                    val username = StringArgumentType.getString(ctx, "username")
+                    val player = ctx.source.getSender() as? Player ?: return@Command 0
+                    
+                    scope.launch {
+                        try {
+                            val uuid = getUUID(username)
+                            val textureData = getTextureData(uuid)
+                            val skull = createSkull(uuid, username, textureData)
+
+                            runSync(player) {
+                                val xpCost = config.getInt("xp-cost", 100)
+                                val currentXP = player.calculateTotalExperiencePoints()
+                                if (currentXP < xpCost) {
+                                    player.sendMessage("§cYou need at least $xpCost XP points!")
+                                    return@runSync
+                                }
+
+                                player.setExperienceLevelAndProgress(currentXP - xpCost)
+                                player.inventory.addItem(skull)
+                                player.sendMessage("§7Obtained skull of §3$username§7! (-$xpCost XP)")
+                            }
+                        } catch (e: Exception) {
+                            runSync(player) {
+                                player.sendMessage("§cError: ${e.message?.replaceFirstChar { it.lowercase() }}")
+                            }
+                        }
+                    }
+                    Command.SINGLE_SUCCESS
+                })
+            )
+            .build()
+    }
+
+    private fun buildNameHistoryCommand(): LiteralCommandNode<CommandSourceStack> {
+        val arg = Commands.argument("player", StringArgumentType.word())
+            .suggests { _, builder: SuggestionsBuilder ->
+                val prefix = builder.remaining
+                CompletableFuture.supplyAsync {
+                    nameKeeper.getNameSuggestions(prefix).forEach(builder::suggest)
+                    builder.build()
+                }
+            }
+            .executes { ctx ->
+                val targetName = StringArgumentType.getString(ctx, "player")
+                val sender = ctx.source.getSender() as? Player ?: return@executes 0
 
                 scope.launch {
                     try {
-                        val uuid = getUUID(username)
-                        val textureData = getTextureData(uuid)
-                        val skull = createSkull(uuid, username, textureData)
-
-                        runSync(player) {
-                            val currentXP = player.calculateTotalExperiencePoints()
-                            if (currentXP < xpCost) {
-                                player.sendMessage("§cYou need at least $xpCost XP points!")
-                                return@runSync
+                        val uuid = getUUID(targetName)
+                        val history = nameKeeper.getHistory(uuid)
+                        runSync(sender) {
+                            if (history.isEmpty()) {
+                                sender.sendMessage("§cNo name history found for §4$targetName§c.")
+                            } else {
+                                sender.sendMessage("§7Name history for §3$targetName§7: ${history.joinToString(", ")}")
                             }
-
-                            player.setExperienceLevelAndProgress(currentXP - xpCost)
-                            player.inventory.addItem(skull)
-                            player.sendMessage("§7Obtained skull of §3$username§7! (-$xpCost XP)")
                         }
                     } catch (e: Exception) {
-                        runSync(player) {
-                            player.sendMessage("§cError: ${e.message?.replaceFirstChar { it.lowercase() }}")
+                        runSync(sender) {
+                            sender.sendMessage("§cError fetching history: ${e.message}")
                         }
                     }
                 }
-            })
-            .register()
+                Command.SINGLE_SUCCESS
+            }
+
+        return Commands.literal("namehistory")
+            .then(arg)
+            .build()
     }
 
     private suspend fun runSync(player: Player, block: () -> Unit) {

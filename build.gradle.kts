@@ -62,6 +62,9 @@ repositories {
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
     compileOnly("dev.jorel:commandapi-bukkit-core:9.7.0")
+
+    // TODO: move this to loader
+    implementation("org.postgresql:postgresql:42.7.7")
     implementation("org.json:json:20250107")
     implementation("com.github.ben-manes.caffeine:caffeine:3.2.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")

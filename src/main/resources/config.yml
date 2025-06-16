@@ -6,3 +6,10 @@ cache:
   # The plugin also keeps a cache of all usernames, and its expiration time is
   # expiration-days - 2. If this is lower than 0, it's forced to be 1
   expiration-days: 3
+
+  database-names:
+    name: "skuld_names"
+    username: "postgres"
+    password: "password"
+    connections: 10
+

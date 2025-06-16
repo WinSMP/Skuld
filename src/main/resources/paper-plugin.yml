@@ -5,4 +5,5 @@ authors: ['winlogon']
 website: "https://github.com/WinSMP/Skuld"
 api-version: "1.21"
 description: "Never forget where your players have been."
+loader: "${PACKAGE}.SkuldLoader"
 folia-supported: true

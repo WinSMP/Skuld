@@ -6,9 +6,3 @@ website: "https://github.com/walker84837/Skuld"
 api-version: "1.21"
 description: "Never forget where your players have been."
 folia-supported: true
-dependencies:
-  server:
-    CommandAPI:
-      load: BEFORE
-      required: true
-      join-classpath: true

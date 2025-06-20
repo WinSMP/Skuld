@@ -25,10 +25,9 @@ import java.net.URLEncoder
 import java.time.Duration
 import java.util.*
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.function.Consumer
-
-import kotlin.coroutines.resume
-import kotlinx.coroutines.*
 
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -45,11 +44,11 @@ import org.bukkit.plugin.java.JavaPlugin
 import org.json.JSONObject
 
 class Skuld : JavaPlugin() {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val logger: java.util.logging.Logger = getLogger()
     private lateinit var usernameCache: Cache<String, UUID>
     private lateinit var textureCache: Cache<UUID, TextureData>
     private lateinit var nameKeeper: PlayerHistoryKeeper
+    private lateinit var executor: ExecutorService
 
     companion object {
         lateinit var instance: Skuld
@@ -68,6 +67,7 @@ class Skuld : JavaPlugin() {
     override fun onEnable() {
         saveDefaultConfig()
         instance = this
+        executor = Executors.newVirtualThreadPerTaskExecutor()
         reloadConfig()
 
         logger.info("Registering commands...")
@@ -96,7 +96,6 @@ class Skuld : JavaPlugin() {
     }
 
     override fun onDisable() {
-        scope.cancel()
     }
 
     private fun buildSkullCommand(): LiteralCommandNode<CommandSourceStack> {
@@ -106,7 +105,7 @@ class Skuld : JavaPlugin() {
                     val username = StringArgumentType.getString(ctx, "username")
                     val player = ctx.source.getSender() as? Player ?: return@Command 0
                     
-                    scope.launch {
+                    executor.execute {
                         try {
                             val uuid = getUUID(username)
                             val textureData = getTextureData(uuid)
@@ -152,7 +151,7 @@ class Skuld : JavaPlugin() {
                 val targetName = StringArgumentType.getString(ctx, "player")
                 val sender = ctx.source.getSender() as? Player ?: return@executes 0
 
-                scope.launch {
+                executor.execute {
                     try {
                         val uuid = getUUID(targetName)
                         val history = nameKeeper.getHistory(uuid)
@@ -191,27 +190,11 @@ class Skuld : JavaPlugin() {
             .build()
     }
 
-    private suspend fun runSync(player: Player, block: () -> Unit) {
+    private fun runSync(player: Player, block: () -> Unit) {
         if (isFolia) {
-            suspendCancellableCoroutine { continuation ->
-                player.scheduler.run(instance, Consumer { _ ->
-                    try {
-                        block()
-                    } finally {
-                        continuation.resume(Unit)
-                    }
-                }, null)
-            }
+            player.scheduler.run(instance, Consumer { _ -> block() }, null)
         } else {
-            suspendCancellableCoroutine { continuation ->
-                Bukkit.getScheduler().runTask(instance, Runnable {
-                    try {
-                        block()
-                    } finally {
-                        continuation.resume(Unit)
-                    }
-                })
-            }
+            Bukkit.getScheduler().runTask(instance, Runnable(block))
         }
     }
 

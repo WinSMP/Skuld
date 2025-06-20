@@ -24,12 +24,10 @@ class SkuldLoader : PluginLoader {
             "org.postgresql:postgresql" to "42.7.7",
             "org.json:json" to "20250107",
             "com.github.ben-manes.caffeine:caffeine" to "3.2.0",
-            "org.jetbrains.kotlinx:kotlinx-coroutines-core" to "1.10.2"
         )
 
         dependencies.forEach {
             val artifact = DefaultArtifact("${it.key}:${it.value}")
-            println("Adding ${it.key}:${it.value}")
             resolver.addDependency(Dependency(artifact, null))
         }
 

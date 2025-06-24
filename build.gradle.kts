@@ -60,7 +60,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.5-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:1.21.6-R0.1-SNAPSHOT")
 
     compileOnly("org.postgresql:postgresql:42.7.7")
     compileOnly("org.json:json:20250107")
@@ -68,7 +68,7 @@ dependencies {
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
-    testImplementation("io.papermc.paper:paper-api:1.21.5-R0.1-SNAPSHOT")
+    testImplementation("io.papermc.paper:paper-api:1.21.6-R0.1-SNAPSHOT")
 }
 
 tasks.test {

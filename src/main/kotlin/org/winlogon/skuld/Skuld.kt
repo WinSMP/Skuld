@@ -20,7 +20,7 @@ import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask
 
 import java.net.HttpURLConnection
-import java.net.URL
+import java.net.URI
 import java.net.URLEncoder
 import java.time.Duration
 import java.util.UUID
@@ -57,6 +57,8 @@ class Skuld : JavaPlugin() {
 
     private val logger: java.util.logging.Logger = getLogger()
 
+    val uuidRegex = Regex("(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})");
+
     private lateinit var usernameCache: Cache<String, UUID>
     private lateinit var textureCache: Cache<UUID, TextureData>
 
@@ -65,7 +67,6 @@ class Skuld : JavaPlugin() {
     private var dataHandler: DataHandler? = null
 
     companion object {
-        lateinit var instance: Skuld
         val isFolia = checkFolia()
 
         private fun checkFolia(): Boolean {
@@ -80,7 +81,6 @@ class Skuld : JavaPlugin() {
 
     override fun onEnable() {
         saveDefaultConfig()
-        instance = this
         reloadConfig()
 
         logger.info("Registering commands...")
@@ -152,23 +152,22 @@ class Skuld : JavaPlugin() {
                             runEntitySyncTask(player) {
                                 val xpCost = config.getInt("xp-cost", 100)
                                 val result = economy.deductFrom(player, xpCost, ExperienceUnit.POINTS)
-                                result.ifOk {
+                                result.fold({
                                     player.inventory.addItem(skull)
 
                                     val usernameComp = Placeholder.component("username", Component.text(username, NamedTextColor.DARK_AQUA))
                                     val decrease = Placeholder.component("decrease", Component.text("-$xpCost", NamedTextColor.DARK_GREEN))
                                     player.sendRichMessage("<gray>Obtained skull of <username>! (<decrease> XP)", usernameComp, decrease)
-                                }
-                                result.ifErr { error ->
+                                }, { error ->
                                     when (error) {
                                         ExperienceError.INSUFFICIENT_EXPERIENCE -> {
-                                            player.sendRichMessage("<red>You need at least $xpCost XP points!")
+                                            player.sendRichMessage("<red>You need at least <dark_red>$xpCost</dark_red> XP points!</red>")
                                         }
                                         else -> {
                                             player.sendRichMessage("<red>An unexpected error occurred while processing your request.")
                                         }
                                     }
-                                }
+                                })
                             }
                         } catch (e: Exception) {
                             runEntitySyncTask(player) {
@@ -234,9 +233,9 @@ class Skuld : JavaPlugin() {
 
     private fun runEntitySyncTask(player: Player, block: () -> Unit) {
         if (isFolia) {
-            player.scheduler.run(instance, Consumer { _ -> block() }, null)
+            player.scheduler.run(this, Consumer { _ -> block() }, null)
         } else {
-            Bukkit.getScheduler().runTask(instance, Runnable(block))
+            Bukkit.getScheduler().runTask(this, Runnable(block))
         }
     }
 
@@ -250,7 +249,7 @@ class Skuld : JavaPlugin() {
 
         // Try Mojang API first
         try {
-            val mojangUrl = URL("https://api.mojang.com/users/profiles/minecraft/$encodedName")
+            val mojangUrl = URI.create("https://api.mojang.com/users/profiles/minecraft/$encodedName").toURL()
             val conn = mojangUrl.openConnection() as HttpURLConnection
             conn.apply {
                 connectTimeout = 5000
@@ -272,7 +271,7 @@ class Skuld : JavaPlugin() {
 
         // Fallback to Minetools.eu
         try {
-            val minetoolsUrl = URL("https://api.minetools.eu/uuid/$encodedName")
+            val minetoolsUrl = URI.create("https://api.minetools.eu/uuid/$encodedName").toURL()
             val conn = minetoolsUrl.openConnection() as HttpURLConnection
             conn.apply {
                 connectTimeout = 5000
@@ -297,7 +296,7 @@ class Skuld : JavaPlugin() {
 
     // Texture data and skull creation
     private fun fetchTextureData(uuid: UUID): TextureData {
-        val url = URL("https://sessionserver.mojang.com/session/minecraft/profile/${uuid.toString().replace("-", "")}")
+        val url = URI.create("https://sessionserver.mojang.com/session/minecraft/profile/${uuid.toString().replace("-", "")}").toURL()
         val conn = url.openConnection() as HttpURLConnection
         conn.apply {
             connectTimeout = 5000
@@ -334,7 +333,7 @@ class Skuld : JavaPlugin() {
 
     // Utilities
     private fun String.toUUID(): UUID {
-        val clean = replace(Regex("(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})"), "$1-$2-$3-$4-$5")
+        val clean = replace(uuidRegex, "$1-$2-$3-$4-$5")
         return UUID.fromString(clean)
     }
 

@@ -1,14 +1,15 @@
+// SPDX-License-Identifier: MPL-2.0
 package org.winlogon.skuld.data
 
 import java.io.File
+import java.sql.Connection
+import java.sql.DriverManager
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.logging.Logger
 
 import org.bukkit.OfflinePlayer
-import org.sqlite.SQLiteDataSource
 import org.winlogon.skuld.VirtualThreadConnectionPool
-import org.winlogon.skuld.data.DataHandler
 import org.winlogon.skuld.map
 
 class SQLiteDatabase(
@@ -17,31 +18,48 @@ class SQLiteDatabase(
     private val logger: Logger
 ) : DataHandler {
     private lateinit var pool: VirtualThreadConnectionPool
+    private lateinit var dbUrl: String
 
     override fun setup() {
         val dbFile = File(dataFolder, "skuld.db")
-        val ds = SQLiteDataSource().apply {
-            url = "jdbc:sqlite:${dbFile.absolutePath}"
+        dbUrl = "jdbc:sqlite:${dbFile.absolutePath}"
+
+        // Ensure SQLite driver is loaded
+        try {
+            Class.forName("org.sqlite.JDBC")
+        } catch (ex: ClassNotFoundException) {
+            throw IllegalStateException("SQLite JDBC driver not found on classpath!", ex)
         }
-        pool = VirtualThreadConnectionPool(ds, maxConnections)
-        createTableIfNotExists(ds)
+
+        pool = VirtualThreadConnectionPool(this::getConnection, maxConnections)
+        createTables()
     }
 
-    private fun createTableIfNotExists(ds: SQLiteDataSource) {
-        ds.connection.use { conn ->
-            conn.prepareStatement(
-                """
-                CREATE TABLE IF NOT EXISTS player_history (
-                  name TEXT NOT NULL PRIMARY KEY,
-                  last_seen INTEGER NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS player_name_history (
-                  uuid TEXT NOT NULL,
-                  name TEXT NOT NULL,
-                  changed_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
-                );
-                """
-            ).use { ps -> ps.executeUpdate() }
+    private fun getConnection(): Connection =
+        DriverManager.getConnection(dbUrl)
+
+    private fun createTables() {
+        getConnection().use { conn ->
+            conn.createStatement().use { st ->
+                st.addBatch(
+                    """
+                    CREATE TABLE IF NOT EXISTS player_history (
+                      name TEXT NOT NULL PRIMARY KEY,
+                      last_seen INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                st.addBatch(
+                    """
+                    CREATE TABLE IF NOT EXISTS player_name_history (
+                      uuid TEXT NOT NULL,
+                      name TEXT NOT NULL,
+                      changed_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+                    )
+                    """.trimIndent()
+                )
+                st.executeBatch()
+            }
         }
     }
 
@@ -59,8 +77,7 @@ class SQLiteDatabase(
                 ps.executeUpdate()
                 Unit
             }
-        }.thenApply { Unit }
-         .exceptionally { err ->
+        }.exceptionally { err ->
             logger.severe("Failed to update history for $name: ${err.message}")
             Unit
         }

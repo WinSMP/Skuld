@@ -58,22 +58,22 @@ repositories {
     maven {
         url = uri("https://repo.codemc.org/repository/maven-public/")
     }
+    maven {
+        url = uri("https://jitpack.io")
+    }
     mavenCentral()
-    maven { url = uri("https://jitpack.io") }
 }
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.6-R0.1-SNAPSHOT")
 
-    compileOnly("org.postgresql:postgresql:42.7.7")
     compileOnly("org.json:json:20250107")
     compileOnly("com.github.ben-manes.caffeine:caffeine:3.2.0")
-    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
-    compileOnly("org.winlogon:xpconomy:0.2.2")
-    compileOnly("com.github.walker84837:JResult:1.3.0")
+    compileOnly("org.winlogon:xpconomy:0.2.3")
 
-    // runtimeOnly
-    compileOnly("org.xerial:sqlite-jdbc:3.50.3.0")
+    // database
+    compileOnly("org.postgresql:postgresql:42.7.7")
+    runtimeOnly("org.xerial:sqlite-jdbc:3.50.3.0")
     compileOnly("com.mysql:mysql-connector-j:9.3.0")
     
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
@@ -97,10 +97,7 @@ tasks.processResources {
 
 tasks.shadowJar {
     archiveClassifier.set("")
-    relocate("io.papermc.lib", "shadow.io.papermc.paperlib")
-    minimize {
-        exclude(dependency("com.github.ben-manes.caffeine:caffeine"))
-    }
+    minimize()
 }
 
 // Disable jar and replace with shadowJar

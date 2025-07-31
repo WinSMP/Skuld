@@ -31,5 +31,30 @@ class VirtualThreadConnectionPool(
     fun shutdown() {
         executor.shutdown()
     }
-}
 
+    companion object {
+        /**
+         * Create a pool using a custom Connection supplier instead of a DataSource.
+         */
+        operator fun invoke(getConn: () -> Connection, maxConnections: Int): VirtualThreadConnectionPool {
+            val ds = object : DataSource {
+                override fun getConnection(): Connection = getConn()
+                override fun getConnection(username: String?, password: String?) = getConn()
+
+                @Suppress("UNCHECKED_CAST")
+                override fun <T> unwrap(iface: Class<T>): T {
+                    throw UnsupportedOperationException("unwrap not supported")
+                }
+
+                override fun isWrapperFor(iface: Class<*>?): Boolean = false
+                override fun setLoginTimeout(seconds: Int) {}
+                override fun getLoginTimeout(): Int = 0
+                override fun getLogWriter(): java.io.PrintWriter? = null
+                override fun setLogWriter(out: java.io.PrintWriter?) {}
+                override fun getParentLogger(): java.util.logging.Logger =
+                    java.util.logging.Logger.getGlobal()
+            }
+            return VirtualThreadConnectionPool(ds, maxConnections)
+        }
+    }
+}

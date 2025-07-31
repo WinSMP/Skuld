@@ -1,42 +1,19 @@
-// SPDX-License-Identifier: MPL-2.0
 package org.winlogon.skuld
 
 import com.destroystokyo.paper.profile.ProfileProperty
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
-import com.mojang.brigadier.Command
-import com.mojang.brigadier.arguments.StringArgumentType
-import com.mojang.brigadier.builder.LiteralArgumentBuilder
-import com.mojang.brigadier.builder.RequiredArgumentBuilder
-import com.mojang.brigadier.context.CommandContext
-import com.mojang.brigadier.suggestion.SuggestionsBuilder
-import com.mojang.brigadier.tree.LiteralCommandNode
-
-import io.papermc.paper.command.brigadier.CommandSourceStack
-import io.papermc.paper.command.brigadier.Commands
-import io.papermc.paper.command.brigadier.argument.ArgumentTypes
-import io.papermc.paper.plugin.lifecycle.event.LifecycleEventManager
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents
-import io.papermc.paper.threadedregions.scheduler.ScheduledTask
-
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URLEncoder
 import java.time.Duration
 import java.util.UUID
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.function.Consumer
-
-import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder
-
 import org.bukkit.Bukkit
 import org.bukkit.Material
-import org.bukkit.OfflinePlayer
-import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.SkullMeta
@@ -46,24 +23,21 @@ import org.winlogon.skuld.data.DataHandler
 import org.winlogon.skuld.data.MySQLDatabase
 import org.winlogon.skuld.data.PostgreSQLDatabase
 import org.winlogon.skuld.data.SQLiteDatabase
-import org.winlogon.xpconomy.ExperienceError
-import org.winlogon.xpconomy.ExperienceUnit
 import org.winlogon.xpconomy.OfflineExperienceCache
 import org.winlogon.xpconomy.XPConomy
 
 class Skuld : JavaPlugin() {
-    private val cache: OfflineExperienceCache? = null
-    private val economy = XPConomy(cache)
+    internal val economy = XPConomy(null as OfflineExperienceCache?)
 
     private val logger: java.util.logging.Logger = getLogger()
 
-    val uuidRegex = Regex("(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})");
+    internal val uuidRegex = Regex("(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})")
 
     private lateinit var usernameCache: Cache<String, UUID>
     private lateinit var textureCache: Cache<UUID, TextureData>
 
-    private var nameKeeper: PlayerHistoryKeeper? = null
-    private var executor = Executors.newVirtualThreadPerTaskExecutor()
+    internal var nameKeeper: PlayerHistoryKeeper? = null
+    internal var executor: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
     private var dataHandler: DataHandler? = null
 
     companion object {
@@ -120,11 +94,15 @@ class Skuld : JavaPlugin() {
             nameKeeper = PlayerHistoryKeeper(dataHandler!!)
         }
 
+        val commandRegistry = CommandRegistry(this)
+
         lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS) { event ->
             val registrar = event.registrar()
-            registrar.register(buildSkullCommand())
-            if (nameKeeper != null) {
-                registrar.register(buildNameHistoryCommand())
+            registrar.apply {
+                register(commandRegistry.buildSkullCommand())
+                if (nameKeeper != null) {
+                    registrar.register(commandRegistry.buildNameHistoryCommand())
+                }
             }
         }
     }
@@ -136,102 +114,7 @@ class Skuld : JavaPlugin() {
         executor.shutdown()
     }
 
-    private fun buildSkullCommand(): LiteralCommandNode<CommandSourceStack> {
-        return Commands.literal("skull")
-            .then(Commands.argument("username", StringArgumentType.word())
-                .executes(Command { ctx ->
-                    val username = StringArgumentType.getString(ctx, "username")
-                    val player = ctx.source.getSender() as? Player ?: return@Command 0
-                    
-                    executor.execute {
-                        try {
-                            val uuid = getUUID(username)
-                            val textureData = getTextureData(uuid)
-                            val skull = createSkull(uuid, username, textureData)
-
-                            runEntitySyncTask(player) {
-                                val xpCost = config.getInt("xp-cost", 100)
-                                val result = economy.deductFrom(player, xpCost, ExperienceUnit.POINTS)
-                                result.fold({
-                                    player.inventory.addItem(skull)
-
-                                    val usernameComp = Placeholder.component("username", Component.text(username, NamedTextColor.DARK_AQUA))
-                                    val decrease = Placeholder.component("decrease", Component.text("-$xpCost", NamedTextColor.DARK_GREEN))
-                                    player.sendRichMessage("<gray>Obtained skull of <username>! (<decrease> XP)", usernameComp, decrease)
-                                }, { error ->
-                                    when (error) {
-                                        ExperienceError.INSUFFICIENT_EXPERIENCE -> {
-                                            player.sendRichMessage("<red>You need at least <dark_red>$xpCost</dark_red> XP points!</red>")
-                                        }
-                                        else -> {
-                                            player.sendRichMessage("<red>An unexpected error occurred while processing your request.")
-                                        }
-                                    }
-                                })
-                            }
-                        } catch (e: Exception) {
-                            runEntitySyncTask(player) {
-                                player.sendRichMessage("<red>Error: ${e.message?.replaceFirstChar { it.lowercase() }}")
-                            }
-                        }
-                    }
-                    Command.SINGLE_SUCCESS
-                })
-            )
-            .build()
-    }
-
-    private fun buildNameHistoryCommand(): LiteralCommandNode<CommandSourceStack> {
-        val arg = Commands.argument("player", StringArgumentType.word())
-            .suggests { _, builder ->
-                val prefix = builder.remaining
-                nameKeeper?.getNameSuggestions(prefix)?.forEach(builder::suggest)
-                builder.buildFuture()
-            }
-            .executes { ctx ->
-                val targetName = StringArgumentType.getString(ctx, "player")
-                val sender = ctx.source.getSender() as? Player ?: return@executes 0
-
-                executor.execute {
-                    try {
-                        val uuid = getUUID(targetName)
-                        val history = nameKeeper?.getHistory(uuid) ?: emptyList()
-                        runEntitySyncTask(sender) {
-                            val isHistoryEmpty = history.isEmpty()
-                            val targetPlaceholder = Placeholder.component(
-                                "target",
-                                Component.text(
-                                    targetName, if (isHistoryEmpty) {
-                                        NamedTextColor.DARK_RED
-                                    } else {
-                                        NamedTextColor.DARK_AQUA
-                                    }
-                                )
-                            )
-                            if (isHistoryEmpty) {
-                                sender.sendRichMessage("<red>No name history found for <target>.", targetPlaceholder)
-                            } else {
-                                sender.sendRichMessage(
-                                    "<gray>Name history for <target>: <dark_aqua>${history.joinToString("<dark_aqua>, <dark_aqua>")}</dark_aqua>",
-                                    targetPlaceholder
-                                )
-                            }
-                        }
-                    } catch (e: Exception) {
-                        runEntitySyncTask(sender) {
-                            sender.sendRichMessage("<red>Error fetching history: ${e.message}")
-                        }
-                    }
-                }
-                Command.SINGLE_SUCCESS
-            }
-
-        return Commands.literal("namehistory")
-            .then(arg)
-            .build()
-    }
-
-    private fun runEntitySyncTask(player: Player, block: () -> Unit) {
+    internal fun runEntitySyncTask(player: Player, block: () -> Unit) {
         if (isFolia) {
             player.scheduler.run(this, Consumer { _ -> block() }, null)
         } else {
@@ -240,7 +123,7 @@ class Skuld : JavaPlugin() {
     }
 
     // UUID fetching with fallback
-    private fun getUUID(username: String): UUID {
+    internal fun getUUID(username: String): UUID {
         return usernameCache.get(username) { fetchUUID(username) }
     }
 
@@ -290,7 +173,7 @@ class Skuld : JavaPlugin() {
         }
     }
 
-    private fun getTextureData(uuid: UUID): TextureData {
+    internal fun getTextureData(uuid: UUID): TextureData {
         return textureCache.get(uuid) { fetchTextureData(it) }
     }
 
@@ -320,7 +203,7 @@ class Skuld : JavaPlugin() {
         throw Exception("No texture data found")
     }
 
-    private fun createSkull(uuid: UUID, name: String, texture: TextureData): ItemStack {
+    internal fun createSkull(uuid: UUID, name: String, texture: TextureData): ItemStack {
         val skull = ItemStack(Material.PLAYER_HEAD)
         val meta = skull.itemMeta as SkullMeta
         val profile = Bukkit.createProfile(uuid, name).apply {
@@ -332,12 +215,12 @@ class Skuld : JavaPlugin() {
     }
 
     // Utilities
-    private fun String.toUUID(): UUID {
+    internal fun String.toUUID(): UUID {
         val clean = replace(uuidRegex, "$1-$2-$3-$4-$5")
         return UUID.fromString(clean)
     }
 
-    private data class TextureData(val value: String, val signature: String)
+    internal data class TextureData(val value: String, val signature: String)
 
     override fun saveDefaultConfig() {
         super.saveDefaultConfig()

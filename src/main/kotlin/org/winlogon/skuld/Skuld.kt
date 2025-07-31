@@ -23,7 +23,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.time.Duration
-import java.util.*
+import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -42,13 +42,27 @@ import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.SkullMeta
 import org.bukkit.plugin.java.JavaPlugin
 import org.json.JSONObject
+import org.winlogon.skuld.data.DataHandler
+import org.winlogon.skuld.data.MySQLDatabase
+import org.winlogon.skuld.data.PostgreSQLDatabase
+import org.winlogon.skuld.data.SQLiteDatabase
+import org.winlogon.xpconomy.ExperienceError
+import org.winlogon.xpconomy.ExperienceUnit
+import org.winlogon.xpconomy.OfflineExperienceCache
+import org.winlogon.xpconomy.XPConomy
 
 class Skuld : JavaPlugin() {
+    private val cache: OfflineExperienceCache? = null
+    private val economy = XPConomy(cache)
+
     private val logger: java.util.logging.Logger = getLogger()
+
     private lateinit var usernameCache: Cache<String, UUID>
     private lateinit var textureCache: Cache<UUID, TextureData>
-    private lateinit var nameKeeper: PlayerHistoryKeeper
-    private lateinit var executor: ExecutorService
+
+    private var nameKeeper: PlayerHistoryKeeper? = null
+    private var executor = Executors.newVirtualThreadPerTaskExecutor()
+    private var dataHandler: DataHandler? = null
 
     companion object {
         lateinit var instance: Skuld
@@ -67,7 +81,6 @@ class Skuld : JavaPlugin() {
     override fun onEnable() {
         saveDefaultConfig()
         instance = this
-        executor = Executors.newVirtualThreadPerTaskExecutor()
         reloadConfig()
 
         logger.info("Registering commands...")
@@ -82,20 +95,45 @@ class Skuld : JavaPlugin() {
             .expireAfterWrite(Duration.ofDays(usernameExpirationDays))
             .build()
 
-        val dbName = config.getString("cache.database-names.name") ?: "skuld_names"
-        val dbUsername = config.getString("cache.database-names.username") ?: "postgres"
-        val dbPassword = config.getString("cache.database-names.password") ?: "password"
-        val connections: Int = config.getInt("cache.database-names.connections", 10)
-        nameKeeper = PlayerHistoryKeeper(dbName, dbUsername, dbPassword, connections, logger)
+        if (config.getBoolean("history.enabled", true)) {
+            val dbType = config.getString("database.type")?.lowercase() ?: "sqlite"
+            val maxConnections = config.getInt("database.max-connections", 10)
+
+            dataHandler = when (dbType.lowercase()) {
+                "postgresql" -> {
+                    val dbName = config.getString("database.postgresql.name") ?: "skuld_names"
+                    val dbUser = config.getString("database.postgresql.username") ?: "postgres"
+                    val dbPassword = config.getString("database.postgresql.password") ?: "password"
+                    PostgreSQLDatabase(dbName, dbUser, dbPassword, maxConnections, logger)
+                }
+                "mysql" -> {
+                    val dbName = config.getString("database.mysql.name") ?: "skuld_names"
+                    val dbUser = config.getString("database.mysql.username") ?: "root"
+                    val dbPassword = config.getString("database.mysql.password") ?: "password"
+                    MySQLDatabase(dbName, dbUser, dbPassword, maxConnections, logger)
+                }
+                else -> {
+                    SQLiteDatabase(dataFolder, maxConnections, logger)
+                }
+            }
+            dataHandler?.setup()
+            nameKeeper = PlayerHistoryKeeper(dataHandler!!)
+        }
 
         lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS) { event ->
             val registrar = event.registrar()
             registrar.register(buildSkullCommand())
-            registrar.register(buildNameHistoryCommand())
+            if (nameKeeper != null) {
+                registrar.register(buildNameHistoryCommand())
+            }
         }
     }
 
     override fun onDisable() {
+        usernameCache.invalidateAll()
+        textureCache.invalidateAll()
+        dataHandler?.close()
+        executor.shutdown()
     }
 
     private fun buildSkullCommand(): LiteralCommandNode<CommandSourceStack> {
@@ -111,23 +149,29 @@ class Skuld : JavaPlugin() {
                             val textureData = getTextureData(uuid)
                             val skull = createSkull(uuid, username, textureData)
 
-                            runSync(player) {
+                            runEntitySyncTask(player) {
                                 val xpCost = config.getInt("xp-cost", 100)
-                                val currentXP = player.calculateTotalExperiencePoints()
-                                if (currentXP < xpCost) {
-                                    player.sendRichMessage("<red>You need at least $xpCost XP points!")
-                                    return@runSync
+                                val result = economy.deductFrom(player, xpCost, ExperienceUnit.POINTS)
+                                result.ifOk {
+                                    player.inventory.addItem(skull)
+
+                                    val usernameComp = Placeholder.component("username", Component.text(username, NamedTextColor.DARK_AQUA))
+                                    val decrease = Placeholder.component("decrease", Component.text("-$xpCost", NamedTextColor.DARK_GREEN))
+                                    player.sendRichMessage("<gray>Obtained skull of <username>! (<decrease> XP)", usernameComp, decrease)
                                 }
-
-                                player.setExperienceLevelAndProgress(currentXP - xpCost)
-                                player.inventory.addItem(skull)
-
-                                val usernameComp = Placeholder.component("username", Component.text(username, NamedTextColor.DARK_AQUA))
-                                val decrease = Placeholder.component("decrease", Component.text("-$xpCost", NamedTextColor.DARK_GREEN))
-                                player.sendRichMessage("<gray>Obtained skull of <username>! (<decrease> XP)", usernameComp, decrease)
+                                result.ifErr { error ->
+                                    when (error) {
+                                        ExperienceError.INSUFFICIENT_EXPERIENCE -> {
+                                            player.sendRichMessage("<red>You need at least $xpCost XP points!")
+                                        }
+                                        else -> {
+                                            player.sendRichMessage("<red>An unexpected error occurred while processing your request.")
+                                        }
+                                    }
+                                }
                             }
                         } catch (e: Exception) {
-                            runSync(player) {
+                            runEntitySyncTask(player) {
                                 player.sendRichMessage("<red>Error: ${e.message?.replaceFirstChar { it.lowercase() }}")
                             }
                         }
@@ -140,12 +184,10 @@ class Skuld : JavaPlugin() {
 
     private fun buildNameHistoryCommand(): LiteralCommandNode<CommandSourceStack> {
         val arg = Commands.argument("player", StringArgumentType.word())
-            .suggests { _, builder: SuggestionsBuilder ->
+            .suggests { _, builder ->
                 val prefix = builder.remaining
-                CompletableFuture.supplyAsync {
-                    nameKeeper.getNameSuggestions(prefix).forEach(builder::suggest)
-                    builder.build()
-                }
+                nameKeeper?.getNameSuggestions(prefix)?.forEach(builder::suggest)
+                builder.buildFuture()
             }
             .executes { ctx ->
                 val targetName = StringArgumentType.getString(ctx, "player")
@@ -154,8 +196,8 @@ class Skuld : JavaPlugin() {
                 executor.execute {
                     try {
                         val uuid = getUUID(targetName)
-                        val history = nameKeeper.getHistory(uuid)
-                        runSync(sender) {
+                        val history = nameKeeper?.getHistory(uuid) ?: emptyList()
+                        runEntitySyncTask(sender) {
                             val isHistoryEmpty = history.isEmpty()
                             val targetPlaceholder = Placeholder.component(
                                 "target",
@@ -177,7 +219,7 @@ class Skuld : JavaPlugin() {
                             }
                         }
                     } catch (e: Exception) {
-                        runSync(sender) {
+                        runEntitySyncTask(sender) {
                             sender.sendRichMessage("<red>Error fetching history: ${e.message}")
                         }
                     }
@@ -190,7 +232,7 @@ class Skuld : JavaPlugin() {
             .build()
     }
 
-    private fun runSync(player: Player, block: () -> Unit) {
+    private fun runEntitySyncTask(player: Player, block: () -> Unit) {
         if (isFolia) {
             player.scheduler.run(instance, Consumer { _ -> block() }, null)
         } else {

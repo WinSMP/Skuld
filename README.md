@@ -8,13 +8,17 @@
 - Track the name of players as they join your server using `/namehistory`.
 - Configurable XP cost for obtaining skulls.
 - Asynchronous UUID and texture data fetching to minimize server lag.
+- Support for multiple databases:
+  - PostgreSQL
+  - MySQL
+  - SQLite
 
 ## Usage
 
 ### Requirements
 
 - [Paper](https://papermc.io) or a compatible fork.
-- [PostgreSQL](https://www.postgresql.org) for database storage. If you're willing to use another database, check the [roadmap](#roadmap).
+- A database for player history. You can choose between PostgreSQL, MySQL, or SQLite.
 
 ### Building from source
 
@@ -40,11 +44,15 @@ In the `config.yml` file, you'll get to see some options. Here is information ab
 |Value|Description|Default|
 |---|---|---|
 |`xp-cost`|The amount of XP (in points) required to be given a skull|100|
-|`cache.expiration-days`|The number of days to keep a player's skull in the cache|3|
-|`cache.database-names.name`|The name of the database table|"skuld_names"|
-|`cache.database-names.username`|The username of who is going to access the database|`"postgres"`|
-|`cache.database-names.password`|The username's password|`"password"`|
-|`cache.database-names.connections`|The number of maximum connections to the database|10|
+|`history.enabled`|Whether to enable the name history feature. If this is disabled, you do not need a database.|true|
+|`database.type`|The type of database to use. Can be "sqlite", "mysql", or "postgresql".|"sqlite"|
+|`database.max-connections`|The number of maximum connections to the database|10|
+|`database.postgresql.name`|The name of the PostgreSQL database|"skuld_names"|
+|`database.postgresql.username`|The username for the PostgreSQL database|`"postgres"`|
+|`database.postgresql.password`|The password for the PostgreSQL database|`"password"`|
+|`database.mysql.name`|The name of the MySQL database|"skuld_names"|
+|`database.mysql.username`|The username for the MySQL database|`"root"`|
+|`database.mysql.password`|The password for the MySQL database|`"password"`|
 
 ### Commands
 
@@ -62,8 +70,8 @@ Contributions are welcome! Please open an issue or submit a pull request.
 - [X] Running the main API logic in a different thread
   - Probably use a thread pool for better performance when under load.
 - Allow for multiple databases/caches:
-  - [ ] MySQL
-  - [ ] SQLite/H2
+  - [X] MySQL
+  - [X] SQLite
   - [ ] Redis/Valkey
 - [ ] More...
 

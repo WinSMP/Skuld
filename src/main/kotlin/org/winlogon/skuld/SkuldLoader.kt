@@ -22,6 +22,8 @@ class SkuldLoader : PluginLoader {
 
         val dependencies = mapOf(
             "org.postgresql:postgresql" to "42.7.7",
+            "org.xerial:sqlite-jdbc" to "3.50.3.0",
+            "com.mysql:mysql-connector-j" to "9.3.0",
             "org.json:json" to "20250107",
             "com.github.ben-manes.caffeine:caffeine" to "3.2.0",
         )

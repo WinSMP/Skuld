@@ -3,7 +3,9 @@ package org.winlogon.skuld
 import com.destroystokyo.paper.profile.ProfileProperty
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
+
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents
+
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URLEncoder
@@ -12,6 +14,7 @@ import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.function.Consumer
+
 import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.entity.Player
@@ -27,7 +30,7 @@ import org.winlogon.xpconomy.OfflineExperienceCache
 import org.winlogon.xpconomy.XPConomy
 
 class Skuld : JavaPlugin() {
-    internal val economy = XPConomy(null as OfflineExperienceCache?)
+    internal val economy = XPConomy()
 
     private val logger: java.util.logging.Logger = getLogger()
 

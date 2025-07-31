@@ -3,7 +3,7 @@ version: "${VERSION}"
 main: "${PACKAGE}.Skuld"
 authors: ['winlogon']
 website: "https://github.com/WinSMP/Skuld"
-api-version: "1.21"
+api-version: "1.21.6"
 description: "Never forget where your players have been."
 loader: "${PACKAGE}.SkuldLoader"
 folia-supported: true

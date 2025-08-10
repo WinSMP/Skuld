@@ -2,6 +2,7 @@
 package org.winlogon.skuld
 
 import org.bukkit.Bukkit
+
 import java.sql.Connection
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService

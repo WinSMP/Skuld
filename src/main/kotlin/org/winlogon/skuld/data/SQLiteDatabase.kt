@@ -25,18 +25,16 @@ class SQLiteDatabase(
         dbUrl = "jdbc:sqlite:${dbFile.absolutePath}"
 
         // Ensure SQLite driver is loaded
-        try {
-            Class.forName("org.sqlite.JDBC")
-        } catch (ex: ClassNotFoundException) {
-            throw IllegalStateException("SQLite JDBC driver not found on classpath!", ex)
-        }
+        runCatching { Class.forName("org.sqlite.JDBC") }
+            .getOrElse {
+                throw IllegalStateException("SQLite JDBC driver not found on classpath!", it)
+            }
 
         pool = VirtualThreadConnectionPool(this::getConnection, maxConnections)
         createTables()
     }
 
-    private fun getConnection(): Connection =
-        DriverManager.getConnection(dbUrl)
+    private fun getConnection(): Connection = DriverManager.getConnection(dbUrl)
 
     private fun createTables() {
         getConnection().use { conn ->

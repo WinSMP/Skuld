@@ -112,7 +112,7 @@ class CommandRegistry(private val plugin: Skuld) {
                 )
             )
 
-            if (!isHistoryEmpty) {
+            if (isHistoryEmpty) {
                 sender.sendRichMessage("<red>No name history found for <target>.", targetPlaceholder)
                 return@runEntitySyncTask
             }

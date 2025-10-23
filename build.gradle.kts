@@ -65,7 +65,8 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.6-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:1.21.8-R0.1-SNAPSHOT")
+    // compileOnly("net.kyori:adventure-api:4.25.0")
 
     compileOnly("org.json:json:20250107")
     compileOnly("com.github.ben-manes.caffeine:caffeine:3.2.0")
@@ -77,7 +78,14 @@ dependencies {
     compileOnly("com.mysql:mysql-connector-j:9.3.0")
     
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
-    testImplementation("io.papermc.paper:paper-api:1.21.6-R0.1-SNAPSHOT")
+    testImplementation("io.papermc.paper:paper-api:1.21.8-R0.1-SNAPSHOT")
+    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.87.0")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.3.1")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.11.0-M1")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testImplementation("com.github.ben-manes.caffeine:caffeine:3.2.0")
+    testImplementation("org.winlogon:xpconomy:0.2.3")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.11.0-M1")
 }
 
 tasks.test {

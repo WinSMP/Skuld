@@ -23,7 +23,7 @@ class CommandRegistry(private val plugin: Skuld) {
             .then(Commands.argument("username", StringArgumentType.word())
                 .executes(Command { ctx ->
                     val username = StringArgumentType.getString(ctx, "username")
-                    val player = ctx.source.getSender() as? Player ?: return@Command Command.SINGLE_SUCCESS
+                    val player = ctx.source.sender as? Player ?: return@Command Command.SINGLE_SUCCESS
 
                     plugin.executor.execute {
                         runCatching {
@@ -77,7 +77,7 @@ class CommandRegistry(private val plugin: Skuld) {
             }
             .executes { ctx ->
                 val targetName = StringArgumentType.getString(ctx, "player")
-                val sender = ctx.source.getSender() as? Player ?: return@executes 0
+                val sender = ctx.source.sender as? Player ?: return@executes 0
 
                 plugin.executor.execute {
                     runCatching {

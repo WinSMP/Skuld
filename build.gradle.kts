@@ -37,6 +37,7 @@ val pluginPackage = project.group.toString()
 val projectName = rootProject.name
 
 repositories {
+    mavenCentral()
     maven {
         name = "papermc"
         url = uri("https://repo.papermc.io/repository/maven-public/")
@@ -58,10 +59,6 @@ repositories {
     maven {
         url = uri("https://repo.codemc.org/repository/maven-public/")
     }
-    maven {
-        url = uri("https://jitpack.io")
-    }
-    mavenCentral()
 }
 
 dependencies {

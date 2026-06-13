@@ -46,7 +46,7 @@ class CommandRegistry(private val plugin: Skuld) {
 
     @Suppress("NOTHING_TO_INLINE")
     private inline fun giveSkullToPlayer(player: Player, username: String, skull: ItemStack) {
-        val xpCost = plugin.config.getInt("xp-cost", 100)
+        val xpCost = plugin.skuldConfig.xpCost
         val result = plugin.economy.deductFrom(player, xpCost, ExperienceUnit.POINTS)
 
         result.fold({

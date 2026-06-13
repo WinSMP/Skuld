@@ -4,6 +4,9 @@ import com.destroystokyo.paper.profile.ProfileProperty
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 
+import de.exlll.configlib.NameFormatters
+import de.exlll.configlib.YamlConfigurations
+
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents
 
 import java.net.HttpURLConnection
@@ -14,6 +17,7 @@ import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.function.Consumer
+import java.util.logging.Logger
 
 import org.bukkit.Bukkit
 import org.bukkit.Material
@@ -22,17 +26,19 @@ import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.SkullMeta
 import org.bukkit.plugin.java.JavaPlugin
 import org.json.JSONObject
+import org.winlogon.skuld.config.SkuldConfig
 import org.winlogon.skuld.data.DataHandler
-import org.winlogon.skuld.data.MySQLDatabase
-import org.winlogon.skuld.data.PostgreSQLDatabase
-import org.winlogon.skuld.data.SQLiteDatabase
-import org.winlogon.xpconomy.OfflineExperienceCache
+import org.winlogon.skuld.data.ExposedDataHandler
+import org.winlogon.skuld.data.MysqlDsn
+import org.winlogon.skuld.data.PostgresqlDsn
+import org.winlogon.skuld.data.createDatabase
 import org.winlogon.xpconomy.XPConomy
 
 class Skuld : JavaPlugin() {
     internal val economy = XPConomy()
+    internal lateinit var skuldConfig: SkuldConfig
 
-    private val logger: java.util.logging.Logger = getLogger()
+    private val logger: Logger = getLogger()
 
     internal val uuidRegex = Regex("(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})")
 
@@ -57,12 +63,21 @@ class Skuld : JavaPlugin() {
     }
 
     override fun onEnable() {
-        saveDefaultConfig()
-        reloadConfig()
+        logger.info("Loading configuration...")
 
-        logger.info("Registering commands...")
+        // -- Config loading --
 
-        val expirationDays = config.getLong("cache.expiration-days", 3).coerceAtLeast(1L)
+        skuldConfig = YamlConfigurations.update(
+            dataFolder.toPath().resolve("config.yml"),
+            SkuldConfig::class.java,
+        ) { builder ->
+            builder.setNameFormatter(NameFormatters.LOWER_KEBAB_CASE)
+                .header("Skuld Configuration")
+        }
+
+        // -- Cache init --
+
+        val expirationDays = skuldConfig.cache.expirationDays.coerceAtLeast(1L)
         usernameCache = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofDays(expirationDays))
             .build()
@@ -72,30 +87,31 @@ class Skuld : JavaPlugin() {
             .expireAfterWrite(Duration.ofDays(usernameExpirationDays))
             .build()
 
-        if (config.getBoolean("history.enabled", true)) {
-            val dbType = config.getString("database.type")?.lowercase() ?: "sqlite"
-            val maxConnections = config.getInt("database.max-connections", 10)
+        // -- Database setup via Exposed (auto-detects vendor from config) --
 
-            dataHandler = when (dbType.lowercase()) {
-                "postgresql" -> {
-                    val dbName = config.getString("database.postgresql.name") ?: "skuld_names"
-                    val dbUser = config.getString("database.postgresql.username") ?: "postgres"
-                    val dbPassword = config.getString("database.postgresql.password") ?: "password"
-                    PostgreSQLDatabase(dbName, dbUser, dbPassword, maxConnections, logger)
-                }
-                "mysql" -> {
-                    val dbName = config.getString("database.mysql.name") ?: "skuld_names"
-                    val dbUser = config.getString("database.mysql.username") ?: "root"
-                    val dbPassword = config.getString("database.mysql.password") ?: "password"
-                    MySQLDatabase(dbName, dbUser, dbPassword, maxConnections, logger)
-                }
-                else -> {
-                    SQLiteDatabase(dataFolder, maxConnections, logger)
-                }
-            }
-            dataHandler?.setup()
+        if (skuldConfig.history.enabled) {
+            val db = createDatabase(
+                dataFolder,
+                skuldConfig.database.type,
+                skuldConfig.database.maxConnections,
+                PostgresqlDsn(
+                    skuldConfig.database.postgresql.name,
+                    skuldConfig.database.postgresql.username,
+                    skuldConfig.database.postgresql.password,
+                ),
+                MysqlDsn(
+                    skuldConfig.database.mysql.name,
+                    skuldConfig.database.mysql.username,
+                    skuldConfig.database.mysql.password,
+                ),
+            )
+            dataHandler = ExposedDataHandler(db, executor, logger)
             nameKeeper = PlayerHistoryKeeper(dataHandler!!)
         }
+
+        logger.info("Registering commands...")
+
+        // -- Command registration --
 
         val commandRegistry = CommandRegistry(this)
 
@@ -104,7 +120,7 @@ class Skuld : JavaPlugin() {
             registrar.apply {
                 register(commandRegistry.buildSkullCommand())
                 if (nameKeeper != null) {
-                    registrar.register(commandRegistry.buildNameHistoryCommand())
+                    register(commandRegistry.buildNameHistoryCommand())
                 }
             }
         }
@@ -182,7 +198,8 @@ class Skuld : JavaPlugin() {
 
     // Texture data and skull creation
     private fun fetchTextureData(uuid: UUID): TextureData {
-        val url = URI.create("https://sessionserver.mojang.com/session/minecraft/profile/${uuid.toString().replace("-", "")}").toURL()
+        val urlFriendlyId = uuid.toString().replace("-", "")
+        val url = URI.create("https://sessionserver.mojang.com/session/minecraft/profile/$urlFriendlyId").toURL()
         val conn = url.openConnection() as HttpURLConnection
         conn.apply {
             connectTimeout = 5000
@@ -224,9 +241,4 @@ class Skuld : JavaPlugin() {
     }
 
     internal data class TextureData(val value: String, val signature: String)
-
-    override fun saveDefaultConfig() {
-        super.saveDefaultConfig()
-        config.options().copyDefaults(true)
-    }
 }

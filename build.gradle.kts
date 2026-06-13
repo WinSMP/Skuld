@@ -2,8 +2,12 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 plugins {
-    id("com.gradleup.shadow") version "8.3.6"
-    kotlin("jvm") version "2.1.10"
+    id("com.gradleup.shadow") version "9.3.0"
+    kotlin("jvm") version "2.3.20"
+}
+
+kotlin {
+    jvmToolchain(25)
 }
 
 group = "org.winlogon.skuld"
@@ -59,21 +63,29 @@ repositories {
     maven {
         url = uri("https://repo.codemc.org/repository/maven-public/")
     }
+    maven {
+        url = uri("https://jitpack.io")
+    }
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
 
     compileOnly("org.json:json:20250107")
     compileOnly("com.github.ben-manes.caffeine:caffeine:3.2.0")
     compileOnly("org.winlogon:xpconomy:0.2.3")
+    compileOnly("de.exlll:configlib-paper:4.8.1")
 
-    // database
+    // Database dependencies: PostgreSQL, MySQL, SQLite, Exposed and HikariCP
+    compileOnly("org.jetbrains.exposed:exposed-core:1.3.0")
+    compileOnly("org.jetbrains.exposed:exposed-jdbc:1.3.0")
+    compileOnly("com.zaxxer:HikariCP:6.2.1")
     compileOnly("org.postgresql:postgresql:42.7.7")
-    runtimeOnly("org.xerial:sqlite-jdbc:3.50.3.0")
     compileOnly("com.mysql:mysql-connector-j:9.3.0")
+    runtimeOnly("org.xerial:sqlite-jdbc:3.50.3.0")
     
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
+    testImplementation("de.exlll:configlib-paper:4.8.1")
     testImplementation("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
     testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.99.0")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.3.1")

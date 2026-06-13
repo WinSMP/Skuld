@@ -11,7 +11,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class PlayerHistoryKeeperTest {
-
     private lateinit var dataHandler: DataHandler
     private lateinit var playerHistoryKeeper: PlayerHistoryKeeper
 

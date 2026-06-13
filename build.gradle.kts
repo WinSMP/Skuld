@@ -69,30 +69,31 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
+    compileOnly(libs.paper.api)
 
     compileOnly("org.json:json:20250107")
-    compileOnly("com.github.ben-manes.caffeine:caffeine:3.2.0")
-    compileOnly("org.winlogon:xpconomy:0.2.3")
-    compileOnly("de.exlll:configlib-paper:4.8.1")
+    compileOnly(libs.caffeine)
+    compileOnly(libs.xpconomy)
+    compileOnly(libs.configlib)
 
-    // Database dependencies: PostgreSQL, MySQL, SQLite, Exposed and HikariCP
-    compileOnly("org.jetbrains.exposed:exposed-core:1.3.0")
-    compileOnly("org.jetbrains.exposed:exposed-jdbc:1.3.0")
-    compileOnly("com.zaxxer:HikariCP:6.2.1")
-    compileOnly("org.postgresql:postgresql:42.7.7")
-    compileOnly("com.mysql:mysql-connector-j:9.3.0")
-    runtimeOnly("org.xerial:sqlite-jdbc:3.50.3.0")
+    // Database dependencies: Exposed, HikariCP, and JDBC drivers
+    compileOnly(libs.bundles.exposed)
+    compileOnly(libs.hikaricp)
+    compileOnly(libs.postgresql)
+    compileOnly(libs.mysql)
+    runtimeOnly(libs.sqlite)
     
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
-    testImplementation("de.exlll:configlib-paper:4.8.1")
-    testImplementation("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
-    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.99.0")
+    testImplementation(libs.configlib)
+    testImplementation(libs.paper.api)
+    testImplementation(libs.mockbukkit)
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.3.1")
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.11.0-M1")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testImplementation("com.github.ben-manes.caffeine:caffeine:3.2.0")
-    testImplementation("org.winlogon:xpconomy:0.2.3")
+    testImplementation(libs.caffeine)
+    testImplementation(libs.xpconomy)
+    testImplementation(libs.bundles.database.drivers)
+    testImplementation(libs.bundles.database.libs)
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.11.0-M1")
 }
 

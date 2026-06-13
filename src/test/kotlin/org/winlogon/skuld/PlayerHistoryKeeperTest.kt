@@ -2,7 +2,10 @@ package org.winlogon.skuld
 
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.mockbukkit.mockbukkit.entity.OfflinePlayerMock
+import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.winlogon.skuld.data.DataHandler
 import java.util.UUID
@@ -50,6 +53,16 @@ class PlayerHistoryKeeperTest {
         val actualSuggestions = playerHistoryKeeper.getNameSuggestions(prefix)
 
         assertEquals(expectedSuggestions, actualSuggestions)
+    }
+
+    @Test
+    fun `updatePlayerHistory should delegate to dataHandler`() {
+        val player = OfflinePlayerMock(UUID.randomUUID(), "TestPlayer")
+        whenever(dataHandler.updatePlayerHistory(any())).thenReturn(CompletableFuture.completedFuture(Unit))
+
+        playerHistoryKeeper.updatePlayerHistory(player)
+
+        verify(dataHandler).updatePlayerHistory(player)
     }
 
     @Test

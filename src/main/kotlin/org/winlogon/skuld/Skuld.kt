@@ -16,7 +16,6 @@ import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.function.Consumer
 import java.util.logging.Logger
 
 import org.bukkit.Bukkit
@@ -59,7 +58,7 @@ open class Skuld : JavaPlugin(), Listener {
             return try {
                 Class.forName("io.papermc.paper.threadedregions.RegionizedServer")
                 true
-            } catch (e: ClassNotFoundException) {
+            } catch (_: ClassNotFoundException) {
                 false
             }
         }
@@ -138,13 +137,14 @@ open class Skuld : JavaPlugin(), Listener {
     }
 
     @EventHandler
+    @Suppress("UNUSED")
     fun onPlayerJoin(event: PlayerJoinEvent) {
         nameKeeper?.updatePlayerHistory(event.player)
     }
 
     internal fun runEntitySyncTask(player: Player, block: () -> Unit) {
         if (isFolia) {
-            player.scheduler.run(this, Consumer { _ -> block() }, null)
+            player.scheduler.run(this, { _ -> block() }, null)
         } else {
             Bukkit.getScheduler().runTask(this, Runnable(block))
         }

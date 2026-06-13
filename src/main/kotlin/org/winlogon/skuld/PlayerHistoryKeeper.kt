@@ -3,9 +3,10 @@ package org.winlogon.skuld
 
 import org.bukkit.OfflinePlayer
 import org.winlogon.skuld.data.DataHandler
+import java.io.Closeable
 import java.util.UUID
 
-class PlayerHistoryKeeper(private val dataHandler: DataHandler) {
+class PlayerHistoryKeeper(private val dataHandler: DataHandler) : Closeable {
     fun updatePlayerHistory(player: OfflinePlayer) {
         dataHandler.updatePlayerHistory(player).join()
     }
@@ -18,7 +19,7 @@ class PlayerHistoryKeeper(private val dataHandler: DataHandler) {
         return dataHandler.getNameSuggestions(prefix).join()
     }
 
-    fun close() {
+    override fun close() {
         dataHandler.close()
     }
 }

@@ -89,7 +89,7 @@ class CommandRegistry(private val plugin: Skuld) {
                 Command.SINGLE_SUCCESS
             }
 
-        return Commands.literal("namehistory")
+        return Commands.literal("name-history")
             .then(arg)
             .build()
     }

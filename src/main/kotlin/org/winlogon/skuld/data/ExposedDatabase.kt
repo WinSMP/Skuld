@@ -17,7 +17,7 @@ import java.util.logging.Level
 import java.util.logging.Logger
 
 /**
- * Contains all players who have logged in and when they last logged in as an Unix timestamp.
+ * Contains all players who have logged in and when they last logged in as a Unix timestamp.
  */
 object PlayerHistoryTable : Table("player_history") {
     val name = varchar("name", 255)
@@ -68,7 +68,7 @@ class ExposedDataHandler(
                     .firstOrNull()
                     ?.get(PlayerNameHistoryTable.name) // Get correspoding name
 
-                // Add a new row if only if the player has a new name
+                // Add a new row only if the player has a new name
                 if (latestName != name) {
                     PlayerNameHistoryTable.insert {
                         it[PlayerNameHistoryTable.uuid] = uuid
@@ -81,7 +81,6 @@ class ExposedDataHandler(
             }
         }.exceptionally { err ->
             logger.log(Level.SEVERE,"Failed to update history for $name", err)
-            Unit
         }
     }
 

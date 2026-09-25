@@ -92,19 +92,21 @@ open class Skuld : JavaPlugin(), Listener {
         // -- Database setup via Exposed (auto-detects vendor from config) --
 
         if (skuldConfig.history.enabled) {
+            val database = skuldConfig.database
+
             val db = createDatabase(
                 dataFolder,
-                skuldConfig.database.type,
-                skuldConfig.database.maxConnections,
+                database.type,
+                database.maxConnections,
                 PostgresqlDsn(
-                    skuldConfig.database.postgresql.name,
-                    skuldConfig.database.postgresql.username,
-                    skuldConfig.database.postgresql.password,
+                    database.postgresql.name,
+                    database.postgresql.username,
+                    database.postgresql.password,
                 ),
                 MysqlDsn(
-                    skuldConfig.database.mysql.name,
-                    skuldConfig.database.mysql.username,
-                    skuldConfig.database.mysql.password,
+                    database.mysql.name,
+                    database.mysql.username,
+                    database.mysql.password,
                 ),
             )
             dataHandler = ExposedDataHandler(db, executor, logger)

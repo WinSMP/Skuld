@@ -27,9 +27,7 @@ class CommandRegistry(private val plugin: Skuld) {
 
                     plugin.executor.execute {
                         runCatching {
-                            val uuid = plugin.getUUID(username)
-                            val textureData = plugin.getTextureData(uuid)
-                            val skull = plugin.createSkull(uuid, username, textureData)
+                            val skull = plugin.skullGetter.getPlayerSkull(username)
 
                             plugin.runEntitySyncTask(player) {
                                 giveSkullToPlayer(player, username, skull)
@@ -96,7 +94,7 @@ class CommandRegistry(private val plugin: Skuld) {
 
     @Suppress("NOTHING_TO_INLINE")
     private inline fun getNameHistory(sender: Player, targetName: String) {
-        val uuid = plugin.getUUID(targetName)
+        val uuid = plugin.skullGetter.getUUID(targetName)
         val history = plugin.nameKeeper?.getHistory(uuid).orEmpty()
 
         plugin.runEntitySyncTask(sender) {
